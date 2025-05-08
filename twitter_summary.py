@@ -1,12 +1,21 @@
 import tweepy
+import time
 import os
 from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Twitter API credentials from GitHub Secrets
 API_KEY = os.environ.get("TWITTER_API_KEY")
 API_SECRET = os.environ.get("TWITTER_API_SECRET")
 ACCESS_TOKEN = os.environ.get("TWITTER_ACCESS_TOKEN")
 ACCESS_SECRET = os.environ.get("TWITTER_ACCESS_SECRET")
+
+# Email settings from GitHub Secrets
+EMAIL_SENDER = os.environ.get("EMAIL_SENDER")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD") 
+EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER")
 
 def get_twitter_api():
     auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_SECRET)
@@ -54,30 +63,61 @@ def summarize_tweets(tweets):
     
     return summary
 
-def save_summary(summary):
-    # Save to file in summaries directory
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M')
-    filename = f"summaries/twitter_summary_{timestamp}.txt"
+def send_email(summary):
+    """Send the summary via email using SMTP."""
+    if not all([EMAIL_SENDER, EMAIL_PASSWORD, EMAIL_RECEIVER]):
+        print("Email credentials not set. Skipping email.")
+        return False
+    
+    try:
+        # Create the email message
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_SENDER
+        msg['To'] = EMAIL_RECEIVER
+        msg['Subject'] = f"Twitter Feed Summary - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        
+        # Attach the summary as plain text
+        msg.attach(MIMEText(summary, 'plain'))
+        
+        # Connect to Gmail SMTP server and send email
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.send_message(msg)
+        
+        print(f"Email sent successfully to {EMAIL_RECEIVER}")
+        return True
+    
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+        return False
+
+def send_summary(summary):
+    """Save the summary to a file and send it via email."""
+    # Option 1: Save to file
+    os.makedirs('summaries', exist_ok=True)
+    filename = f"summaries/twitter_summary_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
     
     with open(filename, "w", encoding="utf-8") as f:
         f.write(summary)
     
-    # Also save latest summary
-    with open("summaries/latest_summary.txt", "w", encoding="utf-8") as f:
-        f.write(summary)
+    print(f"Summary saved to {filename}")
+    
+    # Option 2: Send email
+    send_email(summary)
     
     return filename
 
-def main():
+def job():
     try:
-        print("Starting Twitter summary generation...")
         api = get_twitter_api()
         tweets = get_home_timeline(api)
         summary = summarize_tweets(tweets)
-        filename = save_summary(summary)
-        print(f"Summary saved to {filename}")
+        send_summary(summary)
+        print(f"Summary generated at {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     except Exception as e:
-        print(f"Error generating summary: {e}")
+        print(f"Error: {e}")
 
+# If running directly (not imported)
 if __name__ == "__main__":
-    main()
+    # Run once immediately
+    job()
