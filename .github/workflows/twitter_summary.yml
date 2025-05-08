@@ -1,7 +1,7 @@
 name: Twitter Feed Summary Bot
 on:
   schedule:
-    - cron: '0 */2 * * *'  # Run every 2 hours (fixed syntax)
+  - cron: '*/5 * * * *'  # Run every 30 minutes
   workflow_dispatch:  # Allow manual triggering
 jobs:
   generate-summary:
